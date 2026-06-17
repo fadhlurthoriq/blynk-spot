@@ -100,12 +100,12 @@ function updateUI(data) {
   setGauge(data.tank);
 
   // --- Mode toggle
-  const isManual = data.mode === 1;
-  btnAuto.classList.toggle('active', !isManual);
-  btnManual.classList.toggle('active', isManual);
-
-  // Sembunyikan tombol siram jika mode auto
-  cardSiram.style.display = isManual ? 'flex' : 'none';
+  if (!modeBusy) {
+    const isManual = data.mode === 1;
+    btnAuto.classList.toggle('active', !isManual);
+    btnManual.classList.toggle('active', isManual);
+    cardSiram.style.display = isManual ? 'flex' : 'none';
+  }
 
   // --- LED indicators
   ledBlue.classList.toggle('on',  data.blue  === 1);
@@ -113,10 +113,12 @@ function updateUI(data) {
   ledRelay.classList.toggle('on', data.relay === 1);
 
   // --- Siram button state (sinkron dari relay)
-  const pumping = data.relay === 1;
-  btnSiram.classList.toggle('pumping', pumping);
-  siramIcon.textContent  = pumping ? '🚿' : '💧';
-  siramLabel.textContent = pumping ? 'HENTIKAN' : 'SIRAM';
+  if (!siramBusy) {
+    const pumping = data.relay === 1;
+    btnSiram.classList.toggle('pumping', pumping);
+    siramIcon.textContent  = pumping ? '🚿' : '💧';
+    siramLabel.textContent = pumping ? 'HENTIKAN' : 'SIRAM';
+  }
 
   // Simpan state
   currentState.mode  = data.mode;
@@ -153,7 +155,18 @@ async function fetchStatus() {
 // ============================================================
 // SET MODE (auto / manual)
 // ============================================================
+// ============================================================
+// SET MODE (auto / manual)
+// ============================================================
+let modeBusy = false;
+
 async function setMode(modeVal) {
+  if (modeBusy || !currentState.online) return;
+  modeBusy = true;
+
+  btnAuto.disabled = true;
+  btnManual.disabled = true;
+
   // Optimistic UI update langsung
   const isManual = modeVal === 1;
   btnAuto.classList.toggle('active', !isManual);
@@ -161,15 +174,29 @@ async function setMode(modeVal) {
   cardSiram.style.display = isManual ? 'flex' : 'none';
 
   try {
-    await fetch('/api/mode', {
+    const res = await fetch('/api/mode', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: modeVal }),
       signal: AbortSignal.timeout(4000),
     });
-  } catch {
-    // Gagal kirim, polling berikutnya akan koreksi UI
-    console.warn('Gagal set mode');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    
+    currentState.mode = modeVal;
+    
+    // Cooldown 2 detik agar Blynk & device selesai sinkronisasi
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  } catch (err) {
+    console.warn('Gagal set mode', err);
+    // Kembalikan UI ke state terakhir yang tersimpan
+    const wasManual = currentState.mode === 1;
+    btnAuto.classList.toggle('active', !wasManual);
+    btnManual.classList.toggle('active', wasManual);
+    cardSiram.style.display = wasManual ? 'flex' : 'none';
+  } finally {
+    btnAuto.disabled = false;
+    btnManual.disabled = false;
+    modeBusy = false;
   }
 }
 
@@ -193,19 +220,25 @@ async function toggleSiram() {
   siramLabel.textContent = pumping ? 'HENTIKAN' : 'SIRAM';
 
   try {
-    await fetch('/api/siram', {
+    const res = await fetch('/api/siram', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ state: newState }),
       signal: AbortSignal.timeout(4000),
     });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    
     currentState.relay = newState;
-  } catch {
-    // Kembalikan UI kalau gagal
-    btnSiram.classList.toggle('pumping', !pumping);
-    siramIcon.textContent  = pumping ? '💧' : '🚿';
-    siramLabel.textContent = pumping ? 'SIRAM' : 'HENTIKAN';
-    console.warn('Gagal toggle siram');
+    
+    // Cooldown 2 detik agar Blynk & device selesai sinkronisasi
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  } catch (err) {
+    console.warn('Gagal toggle siram', err);
+    // Kembalikan UI ke state terakhir yang tersimpan
+    const wasPumping = currentState.relay === 1;
+    btnSiram.classList.toggle('pumping', wasPumping);
+    siramIcon.textContent  = wasPumping ? '🚿' : '💧';
+    siramLabel.textContent = wasPumping ? 'HENTIKAN' : 'SIRAM';
   } finally {
     btnSiram.disabled = false;
     siramBusy = false;
