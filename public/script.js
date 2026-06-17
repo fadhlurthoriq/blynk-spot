@@ -149,10 +149,22 @@ function updateUI(data) {
 
   if (targetState.relay === null) {
     const pumping = data.relay === 1;
+    const isManual = data.mode === 1;
     btnSiram.classList.toggle('pumping', pumping);
     siramIcon.textContent  = pumping ? '🚿' : '💧';
-    siramLabel.textContent = pumping ? 'MENYIRAM' : 'SIRAM';
-    btnSiram.disabled = pumping;
+    
+    if (pumping) {
+      if (isManual) {
+        siramLabel.textContent = 'HENTIKAN';
+        btnSiram.disabled = false; // Boleh dimatikan secara manual
+      } else {
+        siramLabel.textContent = 'MENYIRAM';
+        btnSiram.disabled = true; // Dikunci jika otomatis (Auto)
+      }
+    } else {
+      siramLabel.textContent = 'SIRAM';
+      btnSiram.disabled = false;
+    }
     currentState.relay = data.relay;
   }
 
@@ -251,9 +263,15 @@ async function toggleSiram() {
 
   // Optimistic UI
   const pumping = newState === 1;
+  const isManual = currentState.mode === 1;
   btnSiram.classList.toggle('pumping', pumping);
   siramIcon.textContent  = pumping ? '🚿' : '💧';
-  siramLabel.textContent = pumping ? 'MENYIRAM' : 'SIRAM';
+  
+  if (pumping) {
+    siramLabel.textContent = isManual ? 'HENTIKAN' : 'MENYIRAM';
+  } else {
+    siramLabel.textContent = 'SIRAM';
+  }
 
   // Safety timeout: jika dalam 8 detik Blynk tidak sinkron, kembalikan ke currentState
   relayTimeout = setTimeout(() => {
@@ -264,7 +282,7 @@ async function toggleSiram() {
     const wasPumping = currentState.relay === 1;
     btnSiram.classList.toggle('pumping', wasPumping);
     siramIcon.textContent  = wasPumping ? '🚿' : '💧';
-    siramLabel.textContent = wasPumping ? 'MENYIRAM' : 'SIRAM';
+    siramLabel.textContent = wasPumping ? (isManual ? 'HENTIKAN' : 'MENYIRAM') : 'SIRAM';
     console.warn('Sync siram timeout');
   }, 8000);
 
@@ -286,7 +304,7 @@ async function toggleSiram() {
     const wasPumping = currentState.relay === 1;
     btnSiram.classList.toggle('pumping', wasPumping);
     siramIcon.textContent  = wasPumping ? '🚿' : '💧';
-    siramLabel.textContent = wasPumping ? 'MENYIRAM' : 'SIRAM';
+    siramLabel.textContent = wasPumping ? (isManual ? 'HENTIKAN' : 'MENYIRAM') : 'SIRAM';
   }
 }
 
