@@ -5,13 +5,21 @@
 
 const POLL_INTERVAL = 1000; // ms
 
-// -- State terakhir
+// -- State terakhir & sinkronisasi target
 let currentState = {
   online: false,
   mode: 0,     // 0 = auto, 1 = manual
   relay: 0,    // 0 = off, 1 = on
   siramActive: false,
 };
+
+let targetState = {
+  mode: null,
+  relay: null,
+};
+
+let modeTimeout = null;
+let relayTimeout = null;
 
 // ============================================================
 // DOM REFERENCES
@@ -32,7 +40,6 @@ const gaugeText = document.getElementById('gaugeText');
 
 const btnAuto   = document.getElementById('btnAuto');
 const btnManual = document.getElementById('btnManual');
-const cardSiram = document.getElementById('cardSiram');
 const btnSiram  = document.getElementById('btnSiram');
 const siramIcon = document.getElementById('siramIcon');
 const siramLabel= document.getElementById('siramLabel');
@@ -100,11 +107,19 @@ function updateUI(data) {
   setGauge(data.tank);
 
   // --- Mode toggle
-  if (!modeBusy) {
+  if (targetState.mode !== null) {
+    if (data.mode === targetState.mode) {
+      clearTimeout(modeTimeout);
+      targetState.mode = null;
+      btnAuto.disabled = false;
+      btnManual.disabled = false;
+      currentState.mode = data.mode;
+    }
+  } else {
     const isManual = data.mode === 1;
     btnAuto.classList.toggle('active', !isManual);
     btnManual.classList.toggle('active', isManual);
-    cardSiram.style.display = isManual ? 'flex' : 'none';
+    currentState.mode = data.mode;
   }
 
   // --- LED indicators
@@ -113,16 +128,21 @@ function updateUI(data) {
   ledRelay.classList.toggle('on', data.relay === 1);
 
   // --- Siram button state (sinkron dari relay)
-  if (!siramBusy) {
+  if (targetState.relay !== null) {
+    if (data.relay === targetState.relay) {
+      clearTimeout(relayTimeout);
+      targetState.relay = null;
+      btnSiram.disabled = false;
+      currentState.relay = data.relay;
+    }
+  } else {
     const pumping = data.relay === 1;
     btnSiram.classList.toggle('pumping', pumping);
     siramIcon.textContent  = pumping ? '🚿' : '💧';
     siramLabel.textContent = pumping ? 'HENTIKAN' : 'SIRAM';
+    currentState.relay = data.relay;
   }
 
-  // Simpan state
-  currentState.mode  = data.mode;
-  currentState.relay = data.relay;
   currentState.online = true;
 }
 
@@ -155,15 +175,12 @@ async function fetchStatus() {
 // ============================================================
 // SET MODE (auto / manual)
 // ============================================================
-// ============================================================
-// SET MODE (auto / manual)
-// ============================================================
-let modeBusy = false;
-
 async function setMode(modeVal) {
-  if (modeBusy || !currentState.online) return;
-  modeBusy = true;
+  if (!currentState.online) return;
 
+  if (modeTimeout) clearTimeout(modeTimeout);
+
+  targetState.mode = modeVal;
   btnAuto.disabled = true;
   btnManual.disabled = true;
 
@@ -171,7 +188,19 @@ async function setMode(modeVal) {
   const isManual = modeVal === 1;
   btnAuto.classList.toggle('active', !isManual);
   btnManual.classList.toggle('active', isManual);
-  cardSiram.style.display = isManual ? 'flex' : 'none';
+
+  // Safety timeout: jika dalam 8 detik Blynk tidak sinkron, kembalikan ke currentState
+  modeTimeout = setTimeout(() => {
+    targetState.mode = null;
+    btnAuto.disabled = false;
+    btnManual.disabled = false;
+    
+    // Revert UI
+    const wasManual = currentState.mode === 1;
+    btnAuto.classList.toggle('active', !wasManual);
+    btnManual.classList.toggle('active', wasManual);
+    console.warn('Sync mode timeout');
+  }, 8000);
 
   try {
     const res = await fetch('/api/mode', {
@@ -181,43 +210,50 @@ async function setMode(modeVal) {
       signal: AbortSignal.timeout(4000),
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    
-    currentState.mode = modeVal;
-    
-    // Cooldown 2 detik agar Blynk & device selesai sinkronisasi
-    await new Promise(resolve => setTimeout(resolve, 2000));
   } catch (err) {
     console.warn('Gagal set mode', err);
-    // Kembalikan UI ke state terakhir yang tersimpan
+    clearTimeout(modeTimeout);
+    targetState.mode = null;
+    btnAuto.disabled = false;
+    btnManual.disabled = false;
+    
+    // Revert UI
     const wasManual = currentState.mode === 1;
     btnAuto.classList.toggle('active', !wasManual);
     btnManual.classList.toggle('active', wasManual);
-    cardSiram.style.display = wasManual ? 'flex' : 'none';
-  } finally {
-    btnAuto.disabled = false;
-    btnManual.disabled = false;
-    modeBusy = false;
   }
 }
 
 // ============================================================
 // TOGGLE SIRAM MANUAL
 // ============================================================
-let siramBusy = false;
-
 async function toggleSiram() {
-  if (siramBusy || !currentState.online) return;
-  siramBusy = true;
-  btnSiram.disabled = true;
+  if (!currentState.online) return;
 
-  // Toggle state pompa
+  if (relayTimeout) clearTimeout(relayTimeout);
+
   const newState = currentState.relay === 1 ? 0 : 1;
+  targetState.relay = newState;
+  btnSiram.disabled = true;
 
   // Optimistic UI
   const pumping = newState === 1;
   btnSiram.classList.toggle('pumping', pumping);
   siramIcon.textContent  = pumping ? '🚿' : '💧';
   siramLabel.textContent = pumping ? 'HENTIKAN' : 'SIRAM';
+
+  // Safety timeout: jika dalam 8 detik Blynk tidak sinkron, kembalikan ke currentState
+  relayTimeout = setTimeout(() => {
+    targetState.relay = null;
+    btnSiram.disabled = false;
+    
+    // Revert UI
+    const wasPumping = currentState.relay === 1;
+    btnSiram.classList.toggle('pumping', wasPumping);
+    siramIcon.textContent  = wasPumping ? '🚿' : '💧';
+    siramLabel.textContent = wasPumping ? 'HENTIKAN' : 'SIRAM';
+    console.warn('Sync siram timeout');
+  }, 8000);
 
   try {
     const res = await fetch('/api/siram', {
@@ -227,21 +263,17 @@ async function toggleSiram() {
       signal: AbortSignal.timeout(4000),
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    
-    currentState.relay = newState;
-    
-    // Cooldown 2 detik agar Blynk & device selesai sinkronisasi
-    await new Promise(resolve => setTimeout(resolve, 2000));
   } catch (err) {
     console.warn('Gagal toggle siram', err);
-    // Kembalikan UI ke state terakhir yang tersimpan
+    clearTimeout(relayTimeout);
+    targetState.relay = null;
+    btnSiram.disabled = false;
+    
+    // Revert UI
     const wasPumping = currentState.relay === 1;
     btnSiram.classList.toggle('pumping', wasPumping);
     siramIcon.textContent  = wasPumping ? '🚿' : '💧';
     siramLabel.textContent = wasPumping ? 'HENTIKAN' : 'SIRAM';
-  } finally {
-    btnSiram.disabled = false;
-    siramBusy = false;
   }
 }
 
