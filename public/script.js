@@ -47,17 +47,27 @@ const ledRelay  = document.getElementById('ledRelay');
 // ============================================================
 const GAUGE_TOTAL = 157;
 
+// ============================================================
+// HELPER: SAFE NUMERIC VALUE PARSER
+// ============================================================
+function getNumericValue(val, fallback = 0) {
+  if (val === null || val === undefined) return fallback;
+  const num = Number(val);
+  return isNaN(num) ? fallback : num;
+}
+
 function setGauge(percent) {
-  const p = Math.max(0, Math.min(100, percent));
-  const offset = GAUGE_TOTAL - (p / 100) * GAUGE_TOTAL;
+  const p = getNumericValue(percent, 0);
+  const constrained = Math.max(0, Math.min(100, p));
+  const offset = GAUGE_TOTAL - (constrained / 100) * GAUGE_TOTAL;
   gaugeFill.style.strokeDashoffset = offset;
 
   // Warna berdasarkan level
-  if (p < 20)      gaugeFill.style.stroke = '#d94040';
-  else if (p < 50) gaugeFill.style.stroke = '#e8a020';
-  else             gaugeFill.style.stroke = '#2d7fc1';
+  if (constrained < 20)      gaugeFill.style.stroke = '#d94040';
+  else if (constrained < 50) gaugeFill.style.stroke = '#e8a020';
+  else                       gaugeFill.style.stroke = '#2d7fc1';
 
-  gaugeText.textContent = p.toFixed(0) + '%';
+  gaugeText.textContent = constrained.toFixed(0) + '%';
 }
 
 // ============================================================
@@ -71,9 +81,9 @@ function updateUI(data) {
   offlineOverlay.style.display = 'none';
 
   // --- Metric cards
-  const temp  = isFinite(data.temperature) ? data.temperature : 0;
-  const humid = isFinite(data.humidity) ? data.humidity : 0;
-  const soil  = isFinite(data.soil) ? data.soil : 0;
+  const temp  = getNumericValue(data.temperature, 0);
+  const humid = getNumericValue(data.humidity, 0);
+  const soil  = getNumericValue(data.soil, 0);
 
   valTemp.textContent  = temp.toFixed(1);
   valHumid.textContent = humid.toFixed(0);
@@ -84,10 +94,10 @@ function updateUI(data) {
   barSoil.style.width  = Math.min(100, soil) + '%';
 
   // Warna nilai suhu
-  valTemp.style.color = temp >= 35 ? '#d94040' : temp >= 28 ? '#e8a020' : '#1a2e22';
+  valTemp.style.color = temp >= 35 ? '#d94040' : temp >= 28 ? '#e8a020' : '';
 
   // --- Gauge tank
-  setGauge(isFinite(data.tank) ? data.tank : 0);
+  setGauge(data.tank);
 
   // --- Mode toggle
   const isManual = data.mode === 1;
