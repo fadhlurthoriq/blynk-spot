@@ -27,6 +27,17 @@
   <!-- MAIN CONTENT -->
   <main id="mainContent">
 
+    <!-- Low Water Alert Card -->
+    <div class="card card-alert" id="waterAlert" style="display: none;">
+      <div class="alert-content">
+        <span class="alert-icon">⚠️</span>
+        <div class="alert-text">
+          <div class="alert-title">Kapasitas Air Kritis!</div>
+          <div class="alert-sub">Tingkat air di bawah 15%. Harap segera isi ulang tangki air (watertank).</div>
+        </div>
+      </div>
+    </div>
+
     <!-- ROW 1: 3 metric cards -->
     <section class="grid-3">
 
@@ -118,10 +129,6 @@
         <div class="led-item">
           <div class="led led-green" id="ledGreen"></div>
           <span>Standby</span>
-        </div>
-        <div class="led-item">
-          <div class="led led-relay" id="ledRelay"></div>
-          <span>Pompa</span>
         </div>
       </div>
     </section>

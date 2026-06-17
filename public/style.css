@@ -48,6 +48,10 @@ header {
   position: sticky;
   top: 0;
   z-index: 10;
+  transition: background 0.4s ease;
+}
+header.watering {
+  background: #194f79;
 }
 
 .brand { display: flex; align-items: center; gap: 8px; }
@@ -75,6 +79,7 @@ header {
   transition: background var(--trans);
 }
 .status-pill.online .dot  { background: var(--green-light); box-shadow: 0 0 6px var(--green-light); }
+.status-pill.watering .dot { background: var(--water-light); box-shadow: 0 0 6px var(--water-light); }
 .status-pill.offline .dot { background: var(--red); }
 #statusText {
   font-size: 12px;
@@ -291,6 +296,11 @@ main {
   cursor: not-allowed;
 }
 
+.btn-siram.pumping:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+}
+
 @keyframes pulse-pump {
   0%, 100% { box-shadow: 0 3px 10px rgba(45,127,193,0.45); }
   50%       { box-shadow: 0 3px 20px rgba(45,127,193,0.75); }
@@ -380,6 +390,53 @@ main {
 }
 
 /* ============================================================
+   ALERT CARD
+   ============================================================ */
+.card-alert {
+  background: #fdf2f2;
+  border: 1px solid #f8b4b4;
+  border-left: 5px solid var(--red);
+  padding: 16px;
+  animation: slide-in 0.3s ease;
+}
+
+.alert-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.alert-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.alert-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.alert-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--red);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.alert-sub {
+  font-size: 13px;
+  color: var(--text-sec);
+  line-height: 1.4;
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
    DARK MODE
    ============================================================ */
 @media (prefers-color-scheme: dark) {
@@ -426,5 +483,10 @@ main {
   .offline-box {
     background: var(--surface);
     border-color: var(--border);
+  }
+
+  .card-alert {
+    background: #2b1a1a;
+    border-color: #5c2c2c;
   }
 }

@@ -46,7 +46,6 @@ const siramLabel= document.getElementById('siramLabel');
 
 const ledBlue   = document.getElementById('ledBlue');
 const ledGreen  = document.getElementById('ledGreen');
-const ledRelay  = document.getElementById('ledRelay');
 
 // ============================================================
 // GAUGE HELPER
@@ -81,11 +80,18 @@ function setGauge(percent) {
 // UPDATE UI DARI DATA STATUS
 // ============================================================
 function updateUI(data) {
-  // --- Online status
-  statusPill.classList.toggle('online', true);
+  // --- Online & Watering status
+  const isWatering = data.relay === 1 || data.blue === 1;
+  statusPill.classList.toggle('online', !isWatering);
+  statusPill.classList.toggle('watering', isWatering);
   statusPill.classList.remove('offline');
-  statusText.textContent = 'Online';
+  statusText.textContent = isWatering ? 'Menyiram' : 'Online';
   offlineOverlay.style.display = 'none';
+
+  const header = document.querySelector('header');
+  if (header) {
+    header.classList.toggle('watering', isWatering);
+  }
 
   // --- Metric cards
   const temp  = getNumericValue(data.temperature, 0);
@@ -104,7 +110,14 @@ function updateUI(data) {
   valTemp.style.color = temp >= 35 ? '#d94040' : temp >= 28 ? '#e8a020' : '';
 
   // --- Gauge tank
-  setGauge(data.tank);
+  const tankVal = getNumericValue(data.tank, 0);
+  setGauge(tankVal);
+
+  // --- Low Water Alert
+  const waterAlert = document.getElementById('waterAlert');
+  if (waterAlert) {
+    waterAlert.style.display = tankVal < 15 ? 'block' : 'none';
+  }
 
   // --- Mode toggle
   if (targetState.mode !== null) {
@@ -125,21 +138,21 @@ function updateUI(data) {
   // --- LED indicators
   ledBlue.classList.toggle('on',  data.blue  === 1);
   ledGreen.classList.toggle('on', data.green === 1);
-  ledRelay.classList.toggle('on', data.relay === 1);
 
   // --- Siram button state (sinkron dari relay)
   if (targetState.relay !== null) {
     if (data.relay === targetState.relay) {
       clearTimeout(relayTimeout);
       targetState.relay = null;
-      btnSiram.disabled = false;
-      currentState.relay = data.relay;
     }
-  } else {
+  }
+
+  if (targetState.relay === null) {
     const pumping = data.relay === 1;
     btnSiram.classList.toggle('pumping', pumping);
     siramIcon.textContent  = pumping ? '🚿' : '💧';
-    siramLabel.textContent = pumping ? 'HENTIKAN' : 'SIRAM';
+    siramLabel.textContent = pumping ? 'MENYIRAM' : 'SIRAM';
+    btnSiram.disabled = pumping;
     currentState.relay = data.relay;
   }
 
@@ -240,7 +253,7 @@ async function toggleSiram() {
   const pumping = newState === 1;
   btnSiram.classList.toggle('pumping', pumping);
   siramIcon.textContent  = pumping ? '🚿' : '💧';
-  siramLabel.textContent = pumping ? 'HENTIKAN' : 'SIRAM';
+  siramLabel.textContent = pumping ? 'MENYIRAM' : 'SIRAM';
 
   // Safety timeout: jika dalam 8 detik Blynk tidak sinkron, kembalikan ke currentState
   relayTimeout = setTimeout(() => {
@@ -251,7 +264,7 @@ async function toggleSiram() {
     const wasPumping = currentState.relay === 1;
     btnSiram.classList.toggle('pumping', wasPumping);
     siramIcon.textContent  = wasPumping ? '🚿' : '💧';
-    siramLabel.textContent = wasPumping ? 'HENTIKAN' : 'SIRAM';
+    siramLabel.textContent = wasPumping ? 'MENYIRAM' : 'SIRAM';
     console.warn('Sync siram timeout');
   }, 8000);
 
@@ -273,7 +286,7 @@ async function toggleSiram() {
     const wasPumping = currentState.relay === 1;
     btnSiram.classList.toggle('pumping', wasPumping);
     siramIcon.textContent  = wasPumping ? '🚿' : '💧';
-    siramLabel.textContent = wasPumping ? 'HENTIKAN' : 'SIRAM';
+    siramLabel.textContent = wasPumping ? 'MENYIRAM' : 'SIRAM';
   }
 }
 
