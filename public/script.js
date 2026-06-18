@@ -71,7 +71,7 @@ function setGauge(percent) {
 function updateUI(data) {
   const isWatering = data.relay === 1 || data.blue === 1;
 
-  // Header & status pill
+  // Header & status pill — biru saat menyiram
   header.classList.toggle('watering', isWatering);
   statusPill.classList.toggle('online',   !isWatering);
   statusPill.classList.toggle('watering',  isWatering);
@@ -101,33 +101,30 @@ function updateUI(data) {
   const waterAlert = document.getElementById('waterAlert');
   if (waterAlert) waterAlert.style.display = tankVal < 15 ? 'block' : 'none';
 
-  // Mode toggle — hanya update kalau tidak ada pending target
+  // Mode toggle
   if (targetState.mode === null) {
     const isManual = data.mode === 1;
     btnAuto.classList.toggle('active', !isManual);
     btnManual.classList.toggle('active', isManual);
-
-    // Tampilkan tombol siram hanya saat mode manual
-    if (cardSiram) cardSiram.style.display = isManual ? 'flex' : 'none';
     currentState.mode = data.mode;
   } else if (data.mode === targetState.mode) {
-    // Konfirmasi dari device sudah sinkron
     clearTimeout(modeTimeout);
     targetState.mode = null;
     btnAuto.disabled = btnManual.disabled = false;
     currentState.mode = data.mode;
-
     const isManual = data.mode === 1;
     btnAuto.classList.toggle('active', !isManual);
     btnManual.classList.toggle('active', isManual);
-    if (cardSiram) cardSiram.style.display = isManual ? 'flex' : 'none';
   }
+
+  // Tombol siram selalu tampil dan bisa ditekan
+  if (cardSiram) cardSiram.style.display = 'flex';
 
   // LED indicators
   ledBlue.classList.toggle('on',  data.blue  === 1);
   ledGreen.classList.toggle('on', data.green === 1);
 
-  // Relay — update hanya kalau tidak ada pending target
+  // Relay
   if (targetState.relay === null) {
     currentState.relay = data.relay;
     updateSiramButton(data.relay === 1);
@@ -140,7 +137,6 @@ function updateUI(data) {
   currentState.online = true;
 }
 
-// Update visual tombol siram tanpa mengubah disabled state
 function updateSiramButton(pumping) {
   btnSiram.classList.toggle('pumping', pumping);
   siramIcon.textContent  = pumping ? '🚿' : '💧';
@@ -186,7 +182,6 @@ async function setMode(modeVal) {
   const isManual = modeVal === 1;
   btnAuto.classList.toggle('active', !isManual);
   btnManual.classList.toggle('active', isManual);
-  if (cardSiram) cardSiram.style.display = isManual ? 'flex' : 'none';
 
   modeTimeout = setTimeout(() => {
     targetState.mode = null;
@@ -212,25 +207,21 @@ async function setMode(modeVal) {
     const wasManual = currentState.mode === 1;
     btnAuto.classList.toggle('active', !wasManual);
     btnManual.classList.toggle('active', wasManual);
-    if (cardSiram) cardSiram.style.display = wasManual ? 'flex' : 'none';
     console.warn('Gagal set mode:', err);
   }
 }
 
 // ============================================================
 // HOLD-TO-WATER
-// Kirim nyala saat press, kirim mati saat release
 // ============================================================
-let holdActive = false; // mencegah double-trigger touch + mouse
+let holdActive = false;
 
 async function sendRelay(state) {
   targetState.relay = state;
   if (relayTimeout) clearTimeout(relayTimeout);
 
-  // Optimistic UI langsung
   updateSiramButton(state === 1);
 
-  // Safety timeout: kalau device tidak konfirmasi dalam 8 detik, revert
   relayTimeout = setTimeout(() => {
     targetState.relay = null;
     updateSiramButton(currentState.relay === 1);
@@ -254,9 +245,8 @@ async function sendRelay(state) {
 }
 
 function onSiramPress(e) {
-  e.preventDefault(); // cegah scroll saat touch
+  e.preventDefault();
   if (!currentState.online || holdActive) return;
-  if (currentState.mode !== 1) return; // hanya di mode manual
   holdActive = true;
   sendRelay(1);
 }
@@ -276,13 +266,7 @@ btnSiram.addEventListener('touchcancel', onSiramRelease, { passive: false });
 // Mouse events (desktop)
 btnSiram.addEventListener('mousedown', onSiramPress);
 btnSiram.addEventListener('mouseup',   onSiramRelease);
-
-// Kalau kursor keluar tombol saat masih ditekan — stop juga
-btnSiram.addEventListener('mouseleave', (e) => {
-  if (holdActive) onSiramRelease(e);
-});
-
-// Cegah context menu saat long-press di mobile
+btnSiram.addEventListener('mouseleave', (e) => { if (holdActive) onSiramRelease(e); });
 btnSiram.addEventListener('contextmenu', (e) => e.preventDefault());
 
 // ============================================================

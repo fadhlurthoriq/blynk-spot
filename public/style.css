@@ -11,6 +11,7 @@
   --soil:         #8b5e3c;
   --soil-light:   #c4936a;
   --water:        #2d7fc1;
+  --water-dark:   #1a5a8f;
   --water-light:  #6db8f0;
   --amber:        #e8a020;
   --amber-light:  #f5c842;
@@ -48,6 +49,12 @@ header {
   position: sticky;
   top: 0;
   z-index: 10;
+  transition: background 0.4s ease;
+}
+
+/* Header biru saat menyiram */
+header.watering {
+  background: var(--water-dark);
 }
 
 .brand { display: flex; align-items: center; gap: 8px; }
@@ -57,6 +64,7 @@ header {
   font-weight: 700;
   color: #fff;
   letter-spacing: -0.3px;
+  margin: 0;
 }
 
 .status-pill {
@@ -73,8 +81,27 @@ header {
   background: var(--text-mute);
   transition: background var(--trans);
 }
-.status-pill.online .dot  { background: var(--green-light); box-shadow: 0 0 6px var(--green-light); }
+
+/* Dot hijau saat online */
+.status-pill.online .dot {
+  background: var(--green-light);
+  box-shadow: 0 0 6px var(--green-light);
+}
+
+/* Dot biru animasi saat menyiram */
+.status-pill.watering .dot {
+  background: var(--water-light);
+  box-shadow: 0 0 6px var(--water-light);
+  animation: blink-water 1s infinite;
+}
+
 .status-pill.offline .dot { background: var(--red); }
+
+@keyframes blink-water {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
 #statusText {
   font-size: 12px;
   font-weight: 600;
@@ -171,7 +198,6 @@ main {
 .bar-humid { background: linear-gradient(90deg, var(--water), var(--water-light)); }
 .bar-soil  { background: linear-gradient(90deg, var(--soil), var(--soil-light)); }
 
-/* Mobile: stack vertically */
 @media (max-width: 380px) {
   .grid-3 { grid-template-columns: 1fr; }
   .card-value { font-size: 24px; }
@@ -240,14 +266,8 @@ main {
   gap: 4px;
 }
 
-.mode-btn.active {
-  background: var(--amber);
-  color: var(--text-primary);
-  box-shadow: 0 2px 6px rgba(232,160,32,0.35);
-}
-
-#btnAuto.active  { background: var(--green-mid); color: #fff; box-shadow: 0 2px 6px rgba(45,158,95,0.35); }
-#btnManual.active { background: var(--amber); color: #1a2e22; }
+#btnAuto.active   { background: var(--green-mid); color: #fff; box-shadow: 0 2px 6px rgba(45,158,95,0.35); }
+#btnManual.active { background: var(--amber); color: #1a2e22; box-shadow: 0 2px 6px rgba(232,160,32,0.35); }
 
 /* ============================================================
    SIRAM BUTTON
@@ -261,9 +281,9 @@ main {
   border-radius: 10px;
   padding: 0 8px;
   min-height: 52px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
-  letter-spacing: 1px;
+  letter-spacing: 0.5px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -274,9 +294,20 @@ main {
   box-shadow: 0 3px 10px rgba(78,203,130,0.4);
   transition: background var(--trans), transform 80ms, box-shadow var(--trans);
   -webkit-tap-highlight-color: transparent;
+
+  /* Hold-to-water: cegah teks terseleksi & scroll saat tahan */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
 }
 
-.btn-siram:active { transform: scale(0.97); }
+.btn-siram:active:not(:disabled) {
+  transform: scale(0.96);
+  background: var(--water);
+  color: #fff;
+  box-shadow: 0 3px 20px rgba(45,127,193,0.6);
+  animation: none;
+}
 
 .btn-siram.pumping {
   background: var(--water);
@@ -298,8 +329,6 @@ main {
 /* ============================================================
    LED INDICATORS
    ============================================================ */
-.card-leds {}
-
 .leds-row {
   display: flex;
   gap: 20px;
@@ -325,7 +354,6 @@ main {
 
 .led.on.led-blue  { background: #4db8f0; border-color: #2d7fc1; box-shadow: 0 0 8px #4db8f0; }
 .led.on.led-green { background: var(--green-light); border-color: var(--green-mid); box-shadow: 0 0 8px var(--green-light); }
-.led.on.led-relay { background: var(--amber-light); border-color: var(--amber); box-shadow: 0 0 8px var(--amber-light); }
 
 /* ============================================================
    OFFLINE OVERLAY
@@ -350,7 +378,7 @@ main {
   width: 90%;
 }
 
-.offline-icon { font-size: 40px; margin-bottom: 12px; }
+.offline-icon  { font-size: 40px; margin-bottom: 12px; }
 .offline-title { font-size: 18px; font-weight: 800; color: var(--text-primary); margin-bottom: 6px; }
 .offline-sub   { font-size: 13px; color: var(--text-sec); margin-bottom: 20px; }
 
@@ -366,11 +394,44 @@ main {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ============================================================
-   RESPONSIVE ADJUSTMENTS
+   ALERT CARD
+   ============================================================ */
+.card-alert {
+  background: #fdf2f2;
+  border: 1px solid #f8b4b4;
+  border-left: 5px solid var(--red);
+  padding: 16px;
+  animation: slide-in 0.3s ease;
+}
+
+.alert-content { display: flex; align-items: flex-start; gap: 12px; }
+.alert-icon    { font-size: 24px; line-height: 1; }
+.alert-text    { display: flex; flex-direction: column; gap: 4px; }
+
+.alert-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--red);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.alert-sub {
+  font-size: 13px;
+  color: var(--text-sec);
+  line-height: 1.4;
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   RESPONSIVE
    ============================================================ */
 @media (max-width: 400px) {
-  .grid-2 { grid-template-columns: 1fr; }
-  .controls-col { gap: 10px; }
+  .grid-2    { grid-template-columns: 1fr; }
   .card-value { font-size: 26px; }
 }
 
@@ -379,22 +440,22 @@ main {
 }
 
 /* ============================================================
-   SIRAM BUTTON — HOLD STATE OVERRIDE
+   DARK MODE
    ============================================================ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:           #0a0f0d;
+    --surface:      #121b16;
+    --surface2:     #17231c;
+    --border:       #1e3025;
+    --text-primary: #ecf3ee;
+    --text-sec:     #9bbfa9;
+    --text-mute:    #658572;
+    --shadow:       0 4px 20px rgba(0,0,0,0.4);
+  }
 
-/* Label default diubah jadi petunjuk hold */
-.btn-siram {
-  user-select: none;
-  -webkit-user-select: none;
-  touch-action: none; /* cegah scroll saat hold di mobile */
-}
-
-/* Saat sedang ditekan (held) */
-.btn-siram:active:not(:disabled),
-.btn-siram.holding {
-  transform: scale(0.96);
-  background: var(--water);
-  color: #fff;
-  box-shadow: 0 3px 20px rgba(45,127,193,0.6);
-  animation: none; /* matikan pulse saat hold agar terasa responsif */
+  .card-alert {
+    background: #2b1a1a;
+    border-color: #5c2c2c;
+  }
 }
