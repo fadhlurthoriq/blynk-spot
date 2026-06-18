@@ -10,55 +10,51 @@ export default async function handler(req, res) {
     }
 
     try {
-        const [connectedText, pinsText] = await Promise.all([
+        // Cek koneksi hardware + fetch semua pin secara paralel
+        const [
+            connectedText,
+            water, temp, humid, mode, relay, blue, green, tank
+        ] = await Promise.all([
             fetch(`https://blynk.cloud/external/api/isHardwareConnected?token=${token}`)
-                .then(r => {
-                    if (!r.ok) throw new Error(`Status check failed: HTTP ${r.status}`);
-                    return r.text();
-                }),
-            fetch(`https://blynk.cloud/external/api/get?token=${token}&V0&V1&V2&V3&V4&V5&V6&V7`)
-                .then(r => {
-                    if (!r.ok) throw new Error(`Pins data retrieval failed: HTTP ${r.status}`);
-                    return r.text();
-                })
+                .then(r => { if (!r.ok) throw new Error(`Status check failed: HTTP ${r.status}`); return r.text(); }),
+
+            fetch(`https://blynk.cloud/external/api/get?token=${token}&pin=V0`)
+                .then(r => { if (!r.ok) throw new Error(`V0 failed: HTTP ${r.status}`); return r.text(); }),
+
+            fetch(`https://blynk.cloud/external/api/get?token=${token}&pin=V1`)
+                .then(r => { if (!r.ok) throw new Error(`V1 failed: HTTP ${r.status}`); return r.text(); }),
+
+            fetch(`https://blynk.cloud/external/api/get?token=${token}&pin=V2`)
+                .then(r => { if (!r.ok) throw new Error(`V2 failed: HTTP ${r.status}`); return r.text(); }),
+
+            fetch(`https://blynk.cloud/external/api/get?token=${token}&pin=V3`)
+                .then(r => { if (!r.ok) throw new Error(`V3 failed: HTTP ${r.status}`); return r.text(); }),
+
+            fetch(`https://blynk.cloud/external/api/get?token=${token}&pin=V4`)
+                .then(r => { if (!r.ok) throw new Error(`V4 failed: HTTP ${r.status}`); return r.text(); }),
+
+            fetch(`https://blynk.cloud/external/api/get?token=${token}&pin=V5`)
+                .then(r => { if (!r.ok) throw new Error(`V5 failed: HTTP ${r.status}`); return r.text(); }),
+
+            fetch(`https://blynk.cloud/external/api/get?token=${token}&pin=V6`)
+                .then(r => { if (!r.ok) throw new Error(`V6 failed: HTTP ${r.status}`); return r.text(); }),
+
+            fetch(`https://blynk.cloud/external/api/get?token=${token}&pin=V7`)
+                .then(r => { if (!r.ok) throw new Error(`V7 failed: HTTP ${r.status}`); return r.text(); }),
         ]);
 
-        const online = (connectedText.trim() === 'true');
-
-        let pinsData = {};
-        try {
-            pinsData = JSON.parse(pinsText);
-        } catch (e) {
-            throw new Error(`Invalid JSON format received from Blynk: ${pinsText}`);
-        }
-
-        const getPinValue = (pinName) => {
-            const upper = pinName.toUpperCase();
-            const lower = pinName.toLowerCase();
-            if (pinsData[upper] !== undefined) return pinsData[upper];
-            if (pinsData[lower] !== undefined) return pinsData[lower];
-            return null;
-        };
-
-        const water = getPinValue('V0');
-        const temp = getPinValue('V1');
-        const humid = getPinValue('V2');
-        const mode = getPinValue('V3');
-        const relay = getPinValue('V4');
-        const blue = getPinValue('V5');
-        const green = getPinValue('V6');
-        const tank = getPinValue('V7');
+        const online = connectedText.trim() === 'true';
 
         res.status(200).json({
             online,
-            soil: water !== null ? Number(water) : null,
-            temperature: temp !== null ? Number(temp) : null,
-            humidity: humid !== null ? Number(humid) : null,
-            mode: mode !== null ? Number(mode) : null,
-            relay: relay !== null ? Number(relay) : null,
-            blue: blue !== null ? Number(blue) : null,
-            green: green !== null ? Number(green) : null,
-            tank: tank !== null ? Number(tank) : null
+            soil:        Number(water),
+            temperature: Number(temp),
+            humidity:    Number(humid),
+            mode:        Number(mode),
+            relay:       Number(relay),
+            blue:        Number(blue),
+            green:       Number(green),
+            tank:        Number(tank),
         });
 
     } catch (error) {
