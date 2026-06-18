@@ -1,16 +1,15 @@
 // ============================================================
 // SMART WATERING - script.js
 // Polling setiap 1 detik, update DOM langsung (tanpa reload)
+// Tombol siram: hold to water (tahan = nyala, lepas = mati)
 // ============================================================
 
 const POLL_INTERVAL = 1000; // ms
 
-// -- State terakhir & sinkronisasi target
 let currentState = {
   online: false,
-  mode: 0,     // 0 = auto, 1 = manual
-  relay: 0,    // 0 = off, 1 = on
-  siramActive: false,
+  mode: 0,
+  relay: 0,
 };
 
 let targetState = {
@@ -18,85 +17,72 @@ let targetState = {
   relay: null,
 };
 
-let modeTimeout = null;
+let modeTimeout  = null;
 let relayTimeout = null;
 
 // ============================================================
 // DOM REFERENCES
 // ============================================================
-const statusPill   = document.getElementById('statusPill');
-const statusText   = document.getElementById('statusText');
+const statusPill     = document.getElementById('statusPill');
+const statusText     = document.getElementById('statusText');
 const offlineOverlay = document.getElementById('offlineOverlay');
+const header         = document.querySelector('header');
 
-const valTemp   = document.getElementById('valTemp');
-const valHumid  = document.getElementById('valHumid');
-const valSoil   = document.getElementById('valSoil');
-const barTemp   = document.getElementById('barTemp');
-const barHumid  = document.getElementById('barHumid');
-const barSoil   = document.getElementById('barSoil');
+const valTemp  = document.getElementById('valTemp');
+const valHumid = document.getElementById('valHumid');
+const valSoil  = document.getElementById('valSoil');
+const barTemp  = document.getElementById('barTemp');
+const barHumid = document.getElementById('barHumid');
+const barSoil  = document.getElementById('barSoil');
 
 const gaugeFill = document.getElementById('gaugeFill');
 const gaugeText = document.getElementById('gaugeText');
 
 const btnAuto   = document.getElementById('btnAuto');
 const btnManual = document.getElementById('btnManual');
+const cardSiram = document.getElementById('cardSiram');
 const btnSiram  = document.getElementById('btnSiram');
 const siramIcon = document.getElementById('siramIcon');
 const siramLabel= document.getElementById('siramLabel');
 
-const ledBlue   = document.getElementById('ledBlue');
-const ledGreen  = document.getElementById('ledGreen');
+const ledBlue  = document.getElementById('ledBlue');
+const ledGreen = document.getElementById('ledGreen');
 
 // ============================================================
-// GAUGE HELPER
-// Arc panjang total = 157 (setengah lingkaran, r=50)
+// HELPERS
 // ============================================================
 const GAUGE_TOTAL = 157;
 
-// ============================================================
-// HELPER: SAFE NUMERIC VALUE PARSER
-// ============================================================
-function getNumericValue(val, fallback = 0) {
-  if (val === null || val === undefined) return fallback;
-  const num = Number(val);
-  return isNaN(num) ? fallback : num;
+function safeNum(val, fallback = 0) {
+  const n = Number(val);
+  return isNaN(n) ? fallback : n;
 }
 
 function setGauge(percent) {
-  const p = getNumericValue(percent, 0);
-  const constrained = Math.max(0, Math.min(100, p));
-  const offset = GAUGE_TOTAL - (constrained / 100) * GAUGE_TOTAL;
-  gaugeFill.style.strokeDashoffset = offset;
-
-  // Warna berdasarkan level
-  if (constrained < 20)      gaugeFill.style.stroke = '#d94040';
-  else if (constrained < 50) gaugeFill.style.stroke = '#e8a020';
-  else                       gaugeFill.style.stroke = '#2d7fc1';
-
-  gaugeText.textContent = constrained.toFixed(0) + '%';
+  const p = Math.max(0, Math.min(100, safeNum(percent)));
+  gaugeFill.style.strokeDashoffset = GAUGE_TOTAL - (p / 100) * GAUGE_TOTAL;
+  gaugeFill.style.stroke = p < 20 ? '#d94040' : p < 50 ? '#e8a020' : '#2d7fc1';
+  gaugeText.textContent  = p.toFixed(0) + '%';
 }
 
 // ============================================================
-// UPDATE UI DARI DATA STATUS
+// UPDATE UI
 // ============================================================
 function updateUI(data) {
-  // --- Online & Watering status
   const isWatering = data.relay === 1 || data.blue === 1;
-  statusPill.classList.toggle('online', !isWatering);
-  statusPill.classList.toggle('watering', isWatering);
+
+  // Header & status pill
+  header.classList.toggle('watering', isWatering);
+  statusPill.classList.toggle('online',   !isWatering);
+  statusPill.classList.toggle('watering',  isWatering);
   statusPill.classList.remove('offline');
   statusText.textContent = isWatering ? 'Menyiram' : 'Online';
   offlineOverlay.style.display = 'none';
 
-  const header = document.querySelector('header');
-  if (header) {
-    header.classList.toggle('watering', isWatering);
-  }
-
-  // --- Metric cards
-  const temp  = getNumericValue(data.temperature, 0);
-  const humid = getNumericValue(data.humidity, 0);
-  const soil  = getNumericValue(data.soil, 0);
+  // Metrics
+  const temp  = safeNum(data.temperature);
+  const humid = safeNum(data.humidity);
+  const soil  = safeNum(data.soil);
 
   valTemp.textContent  = temp.toFixed(1);
   valHumid.textContent = humid.toFixed(0);
@@ -105,74 +91,64 @@ function updateUI(data) {
   barTemp.style.width  = Math.min(100, (temp / 50) * 100) + '%';
   barHumid.style.width = Math.min(100, humid) + '%';
   barSoil.style.width  = Math.min(100, soil) + '%';
+  valTemp.style.color  = temp >= 35 ? '#d94040' : temp >= 28 ? '#e8a020' : '';
 
-  // Warna nilai suhu
-  valTemp.style.color = temp >= 35 ? '#d94040' : temp >= 28 ? '#e8a020' : '';
-
-  // --- Gauge tank
-  const tankVal = getNumericValue(data.tank, 0);
+  // Tank gauge
+  const tankVal = safeNum(data.tank);
   setGauge(tankVal);
 
-  // --- Low Water Alert
+  // Low water alert
   const waterAlert = document.getElementById('waterAlert');
-  if (waterAlert) {
-    waterAlert.style.display = tankVal < 15 ? 'block' : 'none';
-  }
+  if (waterAlert) waterAlert.style.display = tankVal < 15 ? 'block' : 'none';
 
-  // --- Mode toggle
-  if (targetState.mode !== null) {
-    if (data.mode === targetState.mode) {
-      clearTimeout(modeTimeout);
-      targetState.mode = null;
-      btnAuto.disabled = false;
-      btnManual.disabled = false;
-      currentState.mode = data.mode;
-    }
-  } else {
+  // Mode toggle — hanya update kalau tidak ada pending target
+  if (targetState.mode === null) {
     const isManual = data.mode === 1;
     btnAuto.classList.toggle('active', !isManual);
     btnManual.classList.toggle('active', isManual);
+
+    // Tampilkan tombol siram hanya saat mode manual
+    if (cardSiram) cardSiram.style.display = isManual ? 'flex' : 'none';
     currentState.mode = data.mode;
+  } else if (data.mode === targetState.mode) {
+    // Konfirmasi dari device sudah sinkron
+    clearTimeout(modeTimeout);
+    targetState.mode = null;
+    btnAuto.disabled = btnManual.disabled = false;
+    currentState.mode = data.mode;
+
+    const isManual = data.mode === 1;
+    btnAuto.classList.toggle('active', !isManual);
+    btnManual.classList.toggle('active', isManual);
+    if (cardSiram) cardSiram.style.display = isManual ? 'flex' : 'none';
   }
 
-  // --- LED indicators
+  // LED indicators
   ledBlue.classList.toggle('on',  data.blue  === 1);
   ledGreen.classList.toggle('on', data.green === 1);
 
-  // --- Siram button state (sinkron dari relay)
-  if (targetState.relay !== null) {
-    if (data.relay === targetState.relay) {
-      clearTimeout(relayTimeout);
-      targetState.relay = null;
-    }
-  }
-
+  // Relay — update hanya kalau tidak ada pending target
   if (targetState.relay === null) {
-    const pumping = data.relay === 1;
-    const isManual = data.mode === 1;
-    btnSiram.classList.toggle('pumping', pumping);
-    siramIcon.textContent  = pumping ? '🚿' : '💧';
-    
-    if (pumping) {
-      if (isManual) {
-        siramLabel.textContent = 'HENTIKAN';
-        btnSiram.disabled = false; // Boleh dimatikan secara manual
-      } else {
-        siramLabel.textContent = 'MENYIRAM';
-        btnSiram.disabled = true; // Dikunci jika otomatis (Auto)
-      }
-    } else {
-      siramLabel.textContent = 'SIRAM';
-      btnSiram.disabled = false;
-    }
+    currentState.relay = data.relay;
+    updateSiramButton(data.relay === 1);
+  } else if (data.relay === targetState.relay) {
+    clearTimeout(relayTimeout);
+    targetState.relay = null;
     currentState.relay = data.relay;
   }
 
   currentState.online = true;
 }
 
+// Update visual tombol siram tanpa mengubah disabled state
+function updateSiramButton(pumping) {
+  btnSiram.classList.toggle('pumping', pumping);
+  siramIcon.textContent  = pumping ? '🚿' : '💧';
+  siramLabel.textContent = pumping ? 'SEDANG MENYIRAM...' : 'TAHAN UNTUK MENYIRAM';
+}
+
 function setOffline() {
-  statusPill.classList.remove('online');
+  statusPill.classList.remove('online', 'watering');
   statusPill.classList.add('offline');
   statusText.textContent = 'Offline';
   offlineOverlay.style.display = 'flex';
@@ -180,13 +156,13 @@ function setOffline() {
 }
 
 // ============================================================
-// POLLING STATUS
+// POLLING
 // ============================================================
 async function fetchStatus() {
   try {
     const res = await fetch('/api/status', {
       cache: 'no-store',
-      signal: AbortSignal.timeout(4000), // timeout 4 detik
+      signal: AbortSignal.timeout(4000),
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
@@ -198,33 +174,27 @@ async function fetchStatus() {
 }
 
 // ============================================================
-// SET MODE (auto / manual)
+// SET MODE
 // ============================================================
 async function setMode(modeVal) {
   if (!currentState.online) return;
-
   if (modeTimeout) clearTimeout(modeTimeout);
 
   targetState.mode = modeVal;
-  btnAuto.disabled = true;
-  btnManual.disabled = true;
+  btnAuto.disabled = btnManual.disabled = true;
 
-  // Optimistic UI update langsung
   const isManual = modeVal === 1;
   btnAuto.classList.toggle('active', !isManual);
   btnManual.classList.toggle('active', isManual);
+  if (cardSiram) cardSiram.style.display = isManual ? 'flex' : 'none';
 
-  // Safety timeout: jika dalam 8 detik Blynk tidak sinkron, kembalikan ke currentState
   modeTimeout = setTimeout(() => {
     targetState.mode = null;
-    btnAuto.disabled = false;
-    btnManual.disabled = false;
-    
-    // Revert UI
+    btnAuto.disabled = btnManual.disabled = false;
     const wasManual = currentState.mode === 1;
     btnAuto.classList.toggle('active', !wasManual);
     btnManual.classList.toggle('active', wasManual);
-    console.warn('Sync mode timeout');
+    console.warn('Mode sync timeout — reverted');
   }, 8000);
 
   try {
@@ -236,81 +206,87 @@ async function setMode(modeVal) {
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
   } catch (err) {
-    console.warn('Gagal set mode', err);
     clearTimeout(modeTimeout);
     targetState.mode = null;
-    btnAuto.disabled = false;
-    btnManual.disabled = false;
-    
-    // Revert UI
+    btnAuto.disabled = btnManual.disabled = false;
     const wasManual = currentState.mode === 1;
     btnAuto.classList.toggle('active', !wasManual);
     btnManual.classList.toggle('active', wasManual);
+    if (cardSiram) cardSiram.style.display = wasManual ? 'flex' : 'none';
+    console.warn('Gagal set mode:', err);
   }
 }
 
 // ============================================================
-// TOGGLE SIRAM MANUAL
+// HOLD-TO-WATER
+// Kirim nyala saat press, kirim mati saat release
 // ============================================================
-async function toggleSiram() {
-  if (!currentState.online) return;
+let holdActive = false; // mencegah double-trigger touch + mouse
 
+async function sendRelay(state) {
+  targetState.relay = state;
   if (relayTimeout) clearTimeout(relayTimeout);
 
-  const newState = currentState.relay === 1 ? 0 : 1;
-  targetState.relay = newState;
-  btnSiram.disabled = true;
+  // Optimistic UI langsung
+  updateSiramButton(state === 1);
 
-  // Optimistic UI
-  const pumping = newState === 1;
-  const isManual = currentState.mode === 1;
-  btnSiram.classList.toggle('pumping', pumping);
-  siramIcon.textContent  = pumping ? '🚿' : '💧';
-  
-  if (pumping) {
-    siramLabel.textContent = isManual ? 'HENTIKAN' : 'MENYIRAM';
-  } else {
-    siramLabel.textContent = 'SIRAM';
-  }
-
-  // Safety timeout: jika dalam 8 detik Blynk tidak sinkron, kembalikan ke currentState
+  // Safety timeout: kalau device tidak konfirmasi dalam 8 detik, revert
   relayTimeout = setTimeout(() => {
     targetState.relay = null;
-    btnSiram.disabled = false;
-    
-    // Revert UI
-    const wasPumping = currentState.relay === 1;
-    btnSiram.classList.toggle('pumping', wasPumping);
-    siramIcon.textContent  = wasPumping ? '🚿' : '💧';
-    siramLabel.textContent = wasPumping ? (isManual ? 'HENTIKAN' : 'MENYIRAM') : 'SIRAM';
-    console.warn('Sync siram timeout');
+    updateSiramButton(currentState.relay === 1);
+    console.warn('Relay sync timeout — reverted');
   }, 8000);
 
   try {
     const res = await fetch('/api/siram', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ state: newState }),
+      body: JSON.stringify({ state }),
       signal: AbortSignal.timeout(4000),
     });
     if (!res.ok) throw new Error('HTTP ' + res.status);
   } catch (err) {
-    console.warn('Gagal toggle siram', err);
     clearTimeout(relayTimeout);
     targetState.relay = null;
-    btnSiram.disabled = false;
-    
-    // Revert UI
-    const wasPumping = currentState.relay === 1;
-    btnSiram.classList.toggle('pumping', wasPumping);
-    siramIcon.textContent  = wasPumping ? '🚿' : '💧';
-    siramLabel.textContent = wasPumping ? (isManual ? 'HENTIKAN' : 'MENYIRAM') : 'SIRAM';
+    updateSiramButton(currentState.relay === 1);
+    console.warn('Gagal set relay:', err);
   }
 }
 
-// ============================================================
-// START POLLING
-// ============================================================
-fetchStatus(); // fetch langsung saat load
+function onSiramPress(e) {
+  e.preventDefault(); // cegah scroll saat touch
+  if (!currentState.online || holdActive) return;
+  if (currentState.mode !== 1) return; // hanya di mode manual
+  holdActive = true;
+  sendRelay(1);
+}
 
+function onSiramRelease(e) {
+  e.preventDefault();
+  if (!holdActive) return;
+  holdActive = false;
+  sendRelay(0);
+}
+
+// Touch events (mobile)
+btnSiram.addEventListener('touchstart',  onSiramPress,   { passive: false });
+btnSiram.addEventListener('touchend',    onSiramRelease, { passive: false });
+btnSiram.addEventListener('touchcancel', onSiramRelease, { passive: false });
+
+// Mouse events (desktop)
+btnSiram.addEventListener('mousedown', onSiramPress);
+btnSiram.addEventListener('mouseup',   onSiramRelease);
+
+// Kalau kursor keluar tombol saat masih ditekan — stop juga
+btnSiram.addEventListener('mouseleave', (e) => {
+  if (holdActive) onSiramRelease(e);
+});
+
+// Cegah context menu saat long-press di mobile
+btnSiram.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// ============================================================
+// START
+// ============================================================
+fetchStatus();
 setInterval(fetchStatus, POLL_INTERVAL);
